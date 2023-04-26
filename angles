@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr 24 11:03:39 2023
+
+@author: caitlin
+"""
+
+def convert_negative_angle(angle):
+    """
+    Converts a negative angle to a positive angle.
+
+    Args:
+    angle (float): The angle to be converted.
+
+    Returns:
+    float: The converted positive angle.
+    """
+    print(int(angle % 360.0))
+    return
+
+convert_negative_angle(-30)
+convert_negative_angle(-60)
+convert_negative_angle(-90)
+convert_negative_angle(-120)
+convert_negative_angle(-180)
+convert_negative_angle(30)
+convert_negative_angle(90)
+
+import matplotlib
+print(matplotlib.get_backend())

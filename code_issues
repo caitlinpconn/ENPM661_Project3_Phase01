@@ -1,0 +1,13 @@
+- compute new child node x, y, theta
+- check if child is in obstacle space, may need to modify this code
+-> Can I still use pixel == -1 method?
+-> If so, I need to round the value somehow using int()
+
+
+- update visited_matrix, visited_queue, and open_dict with appropriate cost values
+
+- check if goal has been reached using 1.5 distance and 30 degree threshold values
+
+Problems 
+- wrong x,y, do not expect 15.0, 11.0 for each child
+- each child should be a new node in open_dict but it's not
