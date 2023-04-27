@@ -7,9 +7,11 @@ Created on Tue Mar 21 16:05:08 2023
 @author: caitlin.p.conn
 
 """
+
 # Required imported libraries
 # Additional packages were installed, tried to capture requirements in readme 
 from datetime import datetime
+from collections import OrderedDict
 import matplotlib.pyplot as plt
 
 import numpy as np 
@@ -20,9 +22,6 @@ import cv2
 import math
 from math import degrees
 from math import radians
-
-from collections import OrderedDict
-
 
 # Function finds the third point of a triangle given two points
 # Resource: https://stackoverflow.com/questions/69671976/python-function-to-find-a-point-of-an-equilateral-triangle
@@ -47,19 +46,16 @@ def compute_line_abc(pt_a, pt_b):
 
 # Function creates the map grid image with the appriopriate obstacle and freespace boundaries
 # Resource: quora.com/How-do-you-find-the-distance-between-the-edges-and-the-center-of-a-regular-hexagon-if-you-know-the-length-of-its-sides
-def create_map_grid(obstacle_space_color, free_space_color):
+def create_map_grid(clearance_color, obstacle_space_color, free_space_color, robot_clearance, robot_radius, map_height, map_width):
     
     # Define map grid shape
-    map_height = 250
-    map_width = 600
     map_grid = np.ones((map_height,map_width,3), dtype = np.uint8)
 
-    # Define obstacle and wall color
+    # Set obstacle color
     obstacle_color = obstacle_space_color 
-    # Define obstacle clearance color
-    clearance_color = free_space_color 
             
-    c = 5 # clearance value in pixels
+    # Define total clearance value in pixels using user robot radius and robot clearance inputs
+    c = robot_clearance + robot_radius # 5 + 5 or 5 + 0 
     
     #############################################################
     # Compute hexagon logic
@@ -162,6 +158,8 @@ def create_map_grid(obstacle_space_color, free_space_color):
     tri_up_pt = outer_triangle_pts[1]
     tri_right_pt = outer_triangle_pts[2]
     
+    # print(tri_low_pt)
+    
     t1aa, t1bb, t1cc = compute_line_abc(tri_low_pt, tri_up_pt)
     t2aa, t2bb, t2cc = compute_line_abc(tri_low_pt, tri_right_pt)
     t3aa, t3bb, t3cc = compute_line_abc(tri_up_pt, tri_right_pt)
@@ -172,12 +170,13 @@ def create_map_grid(obstacle_space_color, free_space_color):
     for y in range(map_height):
         for x in range(map_width):
             
+            ###################################################################
             # Plot horizontal walls clearance
-            if (x >= 0 and x < map_width and y >= 5 and y < 10) or (x >= 0 and x < map_width and y >= 240  and y < 245):
+            if (x >= 0 and x < map_width and y >= 5 and y < 10) or (x >= 0 and x < map_width and y >= 240  and y < map_height - robot_clearance ):
                 map_grid[y,x] = clearance_color
             
             # Plot horizontal walls
-            if (x >= 0 and x < map_width and y >= 0 and y < 5) or (x >= 0 and x < map_width and y >= 245  and y < map_height):
+            if (x >= 0 and x < map_width and y >= 0 and y < robot_clearance) or (x >= 0 and x < map_width and y >= map_height - robot_clearance  and y < map_height):
                 map_grid[y,x] = obstacle_color
              
             # Plot vertical walls clearance
@@ -187,7 +186,9 @@ def create_map_grid(obstacle_space_color, free_space_color):
             # Plot vertical walls 
             if (x >= 0 and x < 5 and y >= 0 and y < map_height) or (x >= 595 and x < map_width and y >= 0 and y < map_height):
                 map_grid[y,x] = obstacle_color                
-
+            
+            ###################################################################
+            
             # Display rectangles 
             # Plot lower rectange obstacle space
             if x >= 100 - c and x < 150 + c and y >= 0 - c and y <= 100 + c:
@@ -225,12 +226,18 @@ def create_map_grid(obstacle_space_color, free_space_color):
 ###########################################################################################################################################
 # Function checks if node is in the defined obstacle space
 def check_node_in_obstacle_space(child_node_x, child_node_y, obstacle_matrix):  
-    
-    # print("Child x: ", child_node_x)
-    # print("Child y: ", child_node_y)
-    # print()
-    
     return obstacle_matrix[int(child_node_y)][int(child_node_x)] == -1
+
+# Function checks if node is within map_grid bounds
+# def check_node_in_map(child_node_x, child_node_y, map_height, map_width):
+#     if child_node_x < 0 or child_node_x >= map_width:
+#         return False
+#     if child_node_y < 0 or child_node_y >= map_height:
+#         return False
+#     return True
+def check_node_in_map(child_node_x, child_node_y, map_height, map_width):
+    return 0 <= child_node_x < map_width and 0 <= child_node_y < map_height
+
 
 ###########################################################################################################################################
 # Function determines the validity of the action to produce the child node and checks if the resulting action is in the obstacle space 
@@ -238,62 +245,38 @@ def generate_child_node(obstacle_matrix, map_boundary_matrix, parent_node, goal_
     
     valid_move = False # boolean truth value of valid swap
     is_node_obstacle = False # boolean to check if node is in obstacle space
-    
-    child_node_x = 0
-    child_node_y = 0
-    child_theta = 0
-    cost_of_action = 0
-    cost_to_come = 0
-    angle_to_add = 0
-    
+
+    child_node_x, child_node_y, child_theta, cost_of_action, angle_to_add = 0, 0, 0, 0, 0
+ 
     parent_cost_to_come = parent_node[1][0]
     parent_node_x = parent_node[0][0]
     parent_node_y = parent_node[0][1]
     parent_theta = parent_node[1][4]
     
-
-    # Action logic
-    if action == 1: 
-        angle_to_add = -60
-
-    elif action == 2: 
-        angle_to_add = -30
-
-    elif action == 3: 
-        angle_to_add = 0
-
-    elif action == 4: 
-        angle_to_add = 30
-        
-    elif action == 5: 
-        angle_to_add = 60
-       
-    child_theta = parent_theta + angle_to_add
+    # Action logic using dictionary
+    action_dict = {1: -60, 2: -30, 3: 0, 4: 30, 5: 60}
     
-    if child_theta >= 360:
-        child_theta -= 360
+    # Set angle_to_add based on the action value
+    angle_to_add = action_dict.get(action, 0)
+    child_theta = parent_theta + angle_to_add     
+    child_theta = handle_theta_angle(child_theta)
         
     child_node_x = parent_node_x + step_size * np.cos(radians(child_theta))
     child_node_y = parent_node_y + step_size * np.sin(radians(child_theta))
-    
-    cost_of_action = step_size
-       
-    # print("Action: ", action)
-    # print("Parent Theta: ", parent_theta)
-    # print("Angle: ", angle_to_add)
-    # print("Resulting Child Theta: ", child_theta)
-    # print()
-
-    # Check if computed child node x,y is in obstacle space
-    is_node_obstacle = check_node_in_obstacle_space(child_node_x, child_node_y, obstacle_matrix)
-    valid_move = not is_node_obstacle
+                
+    is_node_in_map = check_node_in_map(child_node_x, child_node_y, map_height, map_width)
+    if is_node_in_map:
+        is_node_obstacle = check_node_in_obstacle_space(child_node_x, child_node_y, obstacle_matrix)
+    else: 
+        is_node_obstacle = False
+    valid_move = is_node_in_map and not is_node_obstacle
 
     # Compute child node's cost to come  value -> CostToCome(x’) = CostToCome(x) + L(x,u)
+    cost_of_action = step_size
     new_cost_to_come = round(cost_of_action + parent_cost_to_come, 1)
     
     pta = (child_node_x, child_node_y)
     ptb = (goal_node_coord[0], goal_node_coord[1])
-
     cost_to_go = np.linalg.norm(np.array(pta)-np.array(ptb))
     
     total_cost = new_cost_to_come + cost_to_go
@@ -437,164 +420,177 @@ def goal_node_found(goal_found, visited_queue, child_node_x_valid, child_node_y_
     
 ###########################################################################################################################################
 # Function gets the user defined input to define the initial and goal nodes 
-
 def get_user_input(map_width, map_height, check_node_in_obstacle_space, obstacle_matrix):
     
-    # # Get user defined initial node
-    # while True:
-    #     x_initial = eval(input("Enter start node's x coordinate. x coordinate can range from 0 to " + str(map_width - 1) + ": "))
-    #     y_initial = eval(input("Enter start node's y coordinate. y coordinate can range from 0 to " + str(map_height - 1) + ": "))
-    #     th_initial = eval(input("Enter the orientation of the robot at the start point in degrees" + ": "))
+    # Get user defined initial node
+    while True:
+        x_initial = eval(input("Enter start node's x coordinate. x coordinate can range from 0 to " + str(map_width - 1) + ": "))
+        y_initial = eval(input("Enter start node's y coordinate. y coordinate can range from 0 to " + str(map_height - 1) + ": "))
+        th_initial = eval(input("Enter the orientation of the robot at the start point in degrees" + ": "))
 
-    #     if not(0 <= x_initial <= map_width - 1) or (not(0 <= y_initial <= map_height - 1)):
-    #         print("Re-enter initial coordinates, coordinates not within bounds.")
-    #         print()
-        
-    #     else:
-    #         print("Start node x-coordinate:", x_initial)
-    #         print("Start node y-coordinate:", y_initial)
-    #         print()
+        if not(0 <= x_initial <= map_width - 1) or (not(0 <= y_initial <= map_height - 1)):
+            print("Re-enter initial coordinates, coordinates not within bounds.")
+            print()
+             
+        else:
+            print("Start node x-coordinate:", x_initial)
+            print("Start node y-coordinate:", y_initial)
+            print()
             
-    #         is_initial_obstacle = check_node_in_obstacle_space(x_initial, y_initial, obstacle_matrix)
-    #         if (is_initial_obstacle == True):
-    #             print("Re-enter initial node, coordinates are within bounds but are not within freespace.")
-    #         else:
-    #             break
+            is_initial_obstacle = check_node_in_obstacle_space(x_initial, y_initial, obstacle_matrix)
+            if (is_initial_obstacle == True):
+                print("Re-enter initial node, coordinates are within bounds but are not within freespace.")
+                print()
+                continue
+            
+            if (th_initial % 30) != 0:
+                print("Re-enter initial theta, angle not multiple of 30. (k * 30), i.e. {.., -60,-30, 0, 30, 60, ..}")
+                print()
+                continue
+            else:
+                break
+                
+    # Get user defined goal node
+    while True:
+        x_goal = eval(input("Enter goal node's x coordinate. x coordinate can range from 0 to " + str(map_width - 1) + ": "))
+        y_goal = eval(input("Enter goal node's y coordinate. y coordinate can range from 0 to " + str(map_height - 1) + ": "))
+        th_goal = eval(input("Enter the orientation of the robot at the goal point in degrees" + ": "))
+
+        if not(0 <= x_goal <= map_width - 1) or (not(0 <= y_goal <= map_height - 1)):
+            print("Re-enter goal coordinates, coordinates not within bounds.")
+            print()
+        
+        else:
+            print("Goal node x-coordinate:", x_goal)
+            print("Goal node y-coordinate:", y_goal)
+            print()
+            
+            is_goal_obstacle = check_node_in_obstacle_space(x_goal, y_goal, obstacle_matrix)
+            if (is_goal_obstacle == True):
+                print("Re-enter goal node, coordinates are within bounds but are not within freespace.")
+                print()
+                continue
+            
+            if (th_goal % 30)!=0:
+                print("Re-enter goal theta, angle not multiple of 30. (k * 30), i.e. {.., -60,-30, 0, 30, 60, ..}")
+                print()
+                continue
+            else:
+                break
+            
+    # Get user defined step size
+    while True:
+        step_size = eval(input("Enter step size of the robot in units (1 <= L <= 10)" + ": "))
+
+        if not(1 <= step_size <= 10):
+            print("Re-enter step size of the robot in units (1 <= L <= 10).")
+            print()
+        
+        else:
+            print("Step Size L:", step_size)
+            print()
+            break
     
-    # # Get user defined goal node
-    # while True:
-    #     x_goal = eval(input("Enter goal node's x coordinate. x coordinate can range from 0 to " + str(map_width - 1) + ": "))
-    #     y_goal = eval(input("Enter goal node's y coordinate. y coordinate can range from 0 to " + str(map_height - 1) + ": "))
-    #     th_goal = eval(input("Enter the orientation of the robot at the goal point in degrees" + ": "))
-
-    #     if not(0 <= x_goal <= map_width - 1) or (not(0 <= y_goal <= map_height - 1)):
-    #         print("Re-enter goal coordinates, coordinates not within bounds.")
-    #         print()
-        
-    #     else:
-    #         print("Goal node x-coordinate:", x_goal)
-    #         print("Goal node y-coordinate:", y_goal)
-    #         print()
-            
-    #         is_goal_obstacle = check_node_in_obstacle_space(x_goal, y_goal, obstacle_matrix)
-    #         if (is_goal_obstacle == True):
-    #             print("Re-enter goal node, coordinates are within bounds but are not within freespace.")
-    #         else:
-    #             break
-            
-    # # Get user defined step size
-    # while True:
-    #     step_size = eval(input("Enter step size of the robot in units (1 <= L <= 10)" + ": "))
-
-    #     if not(1 <= step_size <= 10):
-    #         print("Re-enter step size of the robot in units (1 <= L <= 10).")
-    #         print()
-        
-    #     else:
-    #         print("Step Size L:", step_size)
-    #         print()
-    #         break
-       
-    # Just for debugging and quick code execution 
-    # x_initial = 10
-    # y_initial = 11
-    # th_initial = 0
-    # x_goal = 20
-    # y_goal = 35
-    # th_goal = 0
-    # step_size = 4
-    x_initial = 10
-    y_initial = 11
-    th_initial = 0
-    x_goal = 20
-    y_goal = 35
-    th_goal = 0
-    step_size = 5
+    # Make sure input initial and goal angles are non-negative and are <= 360 degrees
+    th_initial = handle_theta_angle(th_initial) 
+    th_goal = handle_theta_angle(th_goal) 
     
-    th_initial = convert_neg_to_pos(th_initial) 
-
     print("_______________________________________________________________________________________")
     print()
     
+    # Just for debugging and quick code execution 
+    
+    # x_initial = 10
+    # y_initial = 11
+    # th_initial = 0 #-60
+    # x_goal =  150 #200 #250 #280 #225 #220 #215 #210 #205 #200 #170 #62
+    # y_goal = 15
+    # th_goal = 0 #270 # 30
+    # step_size = 10
+    
     return x_initial, y_initial, x_goal, y_goal, th_initial, th_goal, step_size
+
+# Function gets the user defined input to define robot radius and clearance
+def get_user_robot_input():
+            
+    # Get user defined robot radius
+    while True:
+        robot_radius = eval(input("Enter robot radius (ex. 5)" + ": "))
+
+        if not(isinstance(robot_radius, int)):
+            print("Re-enter robot radius as integer value")
+            print()
+            continue
+        
+        else:
+            print("Robot Radius:", robot_radius)
+            print()
+            break
+        
+    # Get user defined robot clearance
+    while True:
+        robot_clearance = eval(input("Enter robot clearance (ex. 5)" + ": "))
+
+        if not(isinstance(robot_clearance, int)):
+            print("Re-enter robot clearance as integer value")
+            print()
+            continue
+        
+        else:
+            print("Robot Clearance:", robot_clearance)
+            print()
+            break
+    
+    return robot_radius, robot_clearance
 
 ###########################################################################################################################################
 
-def convert_neg_to_pos(ang):
-    return int(ang % 360.0)
+def handle_theta_angle(input_angle):
+    return int(input_angle % 360.0)
 
-# Round down to the nearest multiple of the thresholds
-def round_down(x, threshold):
-    return int(x / threshold) * threshold
+def round_num_down(num, thresh_val):
+    return round(num / thresh_val) * thresh_val
 
 def is_node_visited_duplicate(visited_matrix, child_node_x_valid, child_node_y_valid, child_theta):
-    
     dist_thresh = 0.5
     theta_thresh = 30
     
     # Compute the indices of the visited region for the node
-    i = int(round_down(child_node_x_valid, dist_thresh) / dist_thresh)
-    j = int(round_down(child_node_y_valid, dist_thresh) / dist_thresh)
-    k = int(round_down(child_theta, theta_thresh) / theta_thresh)
+    i = round(round_num_down(child_node_x_valid, dist_thresh) / dist_thresh)
+    j = round(round_num_down(child_node_y_valid, dist_thresh) / dist_thresh)
+    k = round(round_num_down(child_theta, theta_thresh) / theta_thresh)
     
-    # print("Child Theta Confirmed: ", child_theta)
-    # print("theta_thresh: ", theta_thresh)
-    # print()
-    # print("x: ", child_node_x_valid)
-    # print("y: ", child_node_y_valid)
-    # print("th: ", child_theta)
-    # print()
-    # print("i: ", i)
-    # print("j: ", j)
-    # print("k: ", k)
-    # print("-------------------------------------")
-    # print()
-    
-    # Check if child_node resides in visited region already in visited_matrix
-    node_visited_status = visited_matrix[i][j][k] == 1
-    
-    return node_visited_status
+    # Check if node resides in visited region already in visited_matrix
+    node_visited_status = False
+    if i >= 0 and i < len(visited_matrix) and j >= 0 and j < len(visited_matrix[i]) and k >= 0 and k < len(visited_matrix[i][j]):
+        node_visited_status = visited_matrix[i][j][k] == 1
+        return node_visited_status, True
+    else:
+        return node_visited_status, False
 
-# Mark a visited region as visited in V
-def mark_visited(x, y, theta, visited_matrix):
-    
+def mark_region_visited(x, y, theta, visited_matrix):
     dist_thresh = 0.5
     theta_thresh = 30
     
-    i = int(round_down(x, dist_thresh) / dist_thresh)
-    j = int(round_down(y, dist_thresh) / dist_thresh)
-    k = int(round_down(theta, theta_thresh) / theta_thresh)
+    # Compute the indices of the visited region for the node
+    i = round(round_num_down(x, dist_thresh) / dist_thresh)
+    j = round(round_num_down(y, dist_thresh) / dist_thresh)
+    k = round(round_num_down(theta, theta_thresh) / theta_thresh)
     
+    # Mark node resides in visited region in visited_matrix
     visited_matrix[i][j][k] == 1
-    
     return
 
-def update_node_in_list(node, node_list):
-    node_dict = {(n.x, n.y, n.theta): n for n in node_list}
-    key = (node.x, node.y, node.theta)
-    if key in node_dict and node.cost_to_come >= node_dict[key].cost_to_come:
-        return False
-    node_dict[key] = node
-    return True
+def compare_nums(numa, numb):
+    tolerance = 1e-6  
+    return abs(numa - numb) < tolerance
 
-
-def is_close(x1, x2):
-    eps = 1e-6  # tolerance value
-
-    return abs(x1 - x2) < eps
-
-# def is_node_in_list(node_x, node_y, node_list, tolerance=1e-6):
-#     #return any(is_close(node_x, n.x, tolerance) and is_close(node_y, n.y, tolerance) and node_theta == n.theta for n in node_list)
-#     return any(is_close(node_x, n.x, tolerance) and is_close(node_y, n.y, tolerance) for n in node_list)
-
-def is_node_in_list(node_x, node_y, node_list):
-    for n in node_list:
-        if is_close(node_x, n[0]) and is_close(node_y, n[1]): #and node_theta == n.theta:
-            return True, n[0], n[1]
+def is_node_in_open_dict(compare_x, compare_y, open_dict):
+    for node in open_dict:
+        if compare_nums(compare_x, node[0]) and compare_nums(compare_y, node[1]): 
+            return True, node[0], node[1]
+        
     return False, None, None
-
-
-###########################################################################################################################################
 
 ###########################################################################################################################################
 # Function uses backtracking logic to find the traversal pathway from the initial node to goal node
@@ -613,6 +609,7 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
     node_idx = 1 # Current node index 
     
     debug_counter = 0
+    debug_counter2 = 0
 
     # Create empty data structures
     visited_queue = {} # explored/visited/closed, valid nodes
@@ -626,7 +623,6 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
     
     ##############################################################################
     # Add initial node to the open node dictionary, initial node has no parent 
-    #open_dict[initial_node_coord] = [0, node_idx, None, (0,0), th_initial]
     open_dict[initial_node_coord] = [0, node_idx, None, initial_node_coord, th_initial]
     
     # Check if the initial node is the goal node, if so stop search
@@ -634,7 +630,6 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
     pt2 = (goal_node_coord[0], goal_node_coord[1])
     euclidean_dist = np.linalg.norm(np.array(pt1)-np.array(pt2))
     
-    # if (euclidean_dist <= euclid_dist_threshold and node_idx != 1):
     if (initial_node_coord[0] == goal_node_coord[0] and initial_node_coord[1] == goal_node_coord[1] and abs(th_initial - th_goal) < theta_threshold):
 
         curr_node_coord = (initial_node_coord[0], initial_node_coord[1])
@@ -642,7 +637,8 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
         return visited_queue, goal_found, fig, ax, closest_node_to_goal_x, closest_node_to_goal_y
     
     ##############################################################################
-    print("DB 1ST PARENT")
+    print("DB STATEMENT - 1ST PARENT")
+    
     # Process next node in the open dictionary with the lowest cost to come
     while (len(open_dict) != 0): # Stop search when node queue is empty 
         
@@ -663,8 +659,10 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
         #######################################################################
         
         # Debug statements
-        if show_grid == True and debug_counter % 5000 == 0:
-            
+        
+        debug_runs = 5000
+        
+        if show_grid == True and debug_counter % debug_runs == 0:
             print("Debug Counter: ", debug_counter)
             print("Current Parent Node:")
             print(curr_node)
@@ -676,53 +674,70 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
         
         # Evaluate children
         curr_parent_idx = curr_node_list[1] # Update parent node index
-        i = 1 # Start with first child or move action
+        i = 1 # Start with first child/move/action
         
         while i < 6: # Iterate for 8 times -> 5 moves
+        
+            ###################################################################
+            # Debug statements
             
+            # debug_counter2 = debug_counter2 + 1
+
+            # debug_runs = 10 # 5000
+            # if show_grid == True and debug_counter2 % debug_runs == 0:
+                
+            #     print("Debug Counter 2: ", debug_counter2)
+            #     print("Current Parent Node:")
+            #     print(curr_node)
+            #     print()
+                
+            # if node_idx == 105:
+            #     print("STOP HERE")
+                
+            ###################################################################
+
             # Generate child node
             new_cost_to_come, total_cost, valid_move, child_node_x_valid, child_node_y_valid, child_theta, is_node_obstacle = generate_child_node(obstacle_matrix, map_boundary_matrix, curr_node, goal_node_coord, i, map_grid, map_height, map_width, step_size)
             
+            if valid_move == False:
+                i = i + 1 # Update action variable to evaluate the next move
+                continue
+            
             # Check if child node is a duplicate node in visited matrix
-            is_node_duplicate = is_node_visited_duplicate(visited_matrix, child_node_x_valid, child_node_y_valid, child_theta)
-            if is_node_duplicate:
+            is_node_duplicate, is_mapping_valid = is_node_visited_duplicate(visited_matrix, child_node_x_valid, child_node_y_valid, child_theta)
+            if is_node_duplicate or not(is_mapping_valid):
+                i = i + 1 # Update action variable to evaluate the next move
                 continue
 
             # Check if child node is in the visited queue
             explored = (child_node_x_valid, child_node_y_valid) in set(visited_queue)
             if explored:
+                i = i + 1 # Update action variable to evaluate the next move
                 continue
               
             # Check if child node is in open dictionary
-            # is_in_open = (child_node_x_valid, child_node_y_valid) in set(open_dict)
-            
-            is_in_open, x_replace, y_replace = is_node_in_list(child_node_x_valid, child_node_y_valid, open_dict)
-            
+            # is_in_open = (child_node_x_valid, child_node_y_valid) in set(open_dict)         
+            is_in_open, x_replace, y_replace = is_node_in_open_dict(child_node_x_valid, child_node_y_valid, open_dict)
             key_replace = (x_replace, y_replace)
             
-                        
             if valid_move == True: # Child node is valid but has not been explored yet
             
                 # Check if the initial node is the goal node, if so stop search
                 pt1 = [child_node_x_valid, child_node_y_valid]
                 pt2 = goal_node_coord
                 euclidean_dist = np.linalg.norm(np.array(pt1)-np.array(pt2))
-                                                
-                if (euclidean_dist <= euclid_dist_threshold): #and abs(child_theta - th_goal) < theta_threshold): # Child node equals goal node
-                    
+                
+                # Check if current child node is goal node                                
+                if (euclidean_dist <= euclid_dist_threshold) and (abs(child_theta - th_goal) < theta_threshold): # Child node equals goal node
                     visited_queue, goal_found, closest_node_to_goal_x, closest_node_to_goal_y = goal_node_found(goal_found, visited_queue, child_node_x_valid, child_node_y_valid, total_cost, node_idx, curr_parent_idx, curr_node_coord)
-                    
                     return visited_queue, goal_found, fig, ax, closest_node_to_goal_x, closest_node_to_goal_y
                 
                 else: # Goal state not found yet
                       
                     if (is_in_open == False): # New child, child has not been expored and is not is in open dictionary
-                        
                         node_idx = node_idx + 1 # Create new child index
-                                                
                         open_dict[(child_node_x_valid, child_node_y_valid)]=(total_cost, node_idx, curr_parent_idx, curr_node_coord, child_theta)
-                        
-                        mark_visited(child_node_x_valid, child_node_y_valid, child_theta, visited_matrix)
+                        mark_region_visited(child_node_x_valid, child_node_y_valid, child_theta, visited_matrix)
 
                     elif (is_in_open == True): # Child has not been explored but is in open dictionary
                             
@@ -730,9 +745,7 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
                         child_theta_val_stored = open_dict[(x_replace, y_replace)][4]  
 
                         if new_cost_to_come < child_c2c_val_stored and abs(child_theta - child_theta_val_stored) < theta_threshold: # update cost to come value and parent node
-                            
                             total_cost_new = total_cost
-
                             existing_child_idx = open_dict[(x_replace, y_replace)][1]
                             
                             del open_dict[key_replace]
@@ -763,10 +776,14 @@ def astar_approach_alg(obstacle_matrix, map_boundary_matrix, initial_node_coord,
 
 def main_func(): 
     
+    map_height = 250
+    map_width = 600
+    
     # Define RGB colors and attributes for map grid image
     explored_color = (255,128,0) #(255,255,255)
     obstacle_space_color = (156,14,38)
     free_space_color = (0,0,0)
+    clearance_color = (102, 0, 0)
     optimal_path_color = (0,204,204)
     start_node_color = (38, 25, 216)
     goal_node_color = (0,153,0)
@@ -778,8 +795,12 @@ def main_func():
     color = (255, 0, 0)
     thickness = 1 # pixels
     
+    robot_clearance = 0 
+    robot_radius = 0 
+    robot_radius, robot_clearance = get_user_robot_input()
+    
     # Create map grid and store original width and height of map image
-    map_grid, map_height, map_width = create_map_grid(obstacle_space_color, free_space_color)
+    map_grid, map_height, map_width = create_map_grid(clearance_color, obstacle_space_color, free_space_color, robot_clearance, robot_radius, map_height, map_width)
     original_map_height = map_height
     original_map_width = map_width
     
@@ -792,18 +813,18 @@ def main_func():
     map_boundary_matrix = map_obstacle_freespace_matrix(map_grid, map_height, map_width)
     obstacle_matrix = map_boundary_matrix.copy()
     
-    print("DB1111")
+    # Get user defined initial and goal node coordinates
+    x_initial, y_initial, x_goal, y_goal, th_initial, th_goal, step_size = get_user_input(map_width, map_height, check_node_in_obstacle_space, obstacle_matrix)
+    initial_node_coord = (x_initial, y_initial)
+    goal_node_coord = (x_goal, y_goal)
+    
+    print("Map Created and User Input Saved")
     
     # Plot the resized map grid with the obstacle and free space
     plt.figure()
     plt.title('Resized Map Grid')
     plt.imshow(map_grid.astype(np.uint8), origin="lower")
     plt.show()
-    
-    # Get user defined initial and goal node coordinates
-    x_initial, y_initial, x_goal, y_goal, th_initial, th_goal, step_size = get_user_input(map_width, map_height, check_node_in_obstacle_space, obstacle_matrix)
-    initial_node_coord = (x_initial, y_initial)
-    goal_node_coord = (x_goal, y_goal)
     
     ###########################################################################################################
     
@@ -850,28 +871,21 @@ def main_func():
     # Create animation visualization video
     out = cv2.VideoWriter('conn_astar_algorithm_video.avi', cv2.VideoWriter_fourcc(*'XVID'), 50, (original_map_width,original_map_height))
     
+    #################################################################################################
+    
     start_goal_pt_thickness = 3
     map_grid = cv2.circle(map_grid, (x_initial,y_initial), radius = 0, color=start_node_color, thickness = start_goal_pt_thickness) # start node
     map_grid = cv2.circle(map_grid, (x_goal,y_goal), radius = 0, color=goal_node_color, thickness = start_goal_pt_thickness) # goal node 
 
     last_parent_x = next(iter(visited_queue))[0]
- 
     last_parent_y = next(iter(visited_queue))[1]
-    
     last_parent_x = int(last_parent_x)
     last_parent_y = int(last_parent_y)
-    
-
 
     for visited_node in visited_queue:
         
-        #######################################################################################################################################
-        
         # Define the color of the arrow
         color = (255, 255, 255)
-        
-        # map_grid[int(visited_node[1]),int(visited_node[0])] = explored_color # explored node
-
         
         # Add the arrow to the plot
         arrow_img = np.copy(map_grid)
@@ -884,12 +898,10 @@ def main_func():
         map_grid = cv2.addWeighted(map_grid, 0.5, arrow_img, 0.5, 0)
         
         # Plot the resized map grid with the obstacle and free space
-        plt.figure()
-        plt.title('Resized Map Grid')
-        plt.imshow(map_grid.astype(np.uint8), origin="lower")
-        plt.show()
-        
-        #######################################################################################################################################
+        # plt.figure()
+        # plt.title('Resized Map Grid')
+        # plt.imshow(map_grid.astype(np.uint8), origin="lower")
+        # plt.show()
         
         map_grid = cv2.circle(map_grid, (x_initial,y_initial), radius =0 , color=start_node_color, thickness = start_goal_pt_thickness) # start node
         map_grid = cv2.circle(map_grid, (x_goal,y_goal), radius = 0, color=goal_node_color, thickness = start_goal_pt_thickness) # goal node
@@ -987,4 +999,4 @@ def main_func():
 main_func()
 
 # End of code file
-#####################################################################################################
+###########################################################################################################################################
