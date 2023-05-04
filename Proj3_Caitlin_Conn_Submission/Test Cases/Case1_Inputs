@@ -1,0 +1,45 @@
+Caitlin Conn Project 3 Phase 1 Case 1:
+
+Enter robot radius (ex. 5): 5
+Robot Radius: 5
+
+Enter robot clearance (ex. 5): 5
+Robot Clearance: 5
+
+Enter start node's x coordinate. x coordinate can range from 0 to 299: 10
+Enter start node's y coordinate. y coordinate can range from 0 to 124: 11
+Enter the orientation of the robot at the start point in degrees: 0
+Start node x-coordinate: 10
+Start node y-coordinate: 11
+
+Enter goal node's x coordinate. x coordinate can range from 0 to 299: 225
+Enter goal node's y coordinate. y coordinate can range from 0 to 124: 15
+Enter the orientation of the robot at the goal point in degrees: 30
+Goal node x-coordinate: 225
+Goal node y-coordinate: 15
+
+Enter step size of the robot in units (1 <= L <= 10): 10
+Step Size L: 10
+
+_______________________________________________________________________________________
+
+Map Created and User Input Saved
+
+Main code execution has started...
+
+Last Child Node (Goal Node): 
+ ((224.5, 16.0), (261.1180339887499, 3012, 2012, (216.0, 11.0), 260))
+
+Problem solved, now backtrack to find optimal path!
+
+_______________________________________________________________________________________
+
+Was goal found ? ->  True
+
+- Problem solved in (hours:min:sec:milliseconds) (Method 1): 00:00:00.69
+- Problem solved in (hours:min:sec:milliseconds) (Method 2): 0:00:00.693808
+
+Start node coordinate input: (10, 11)
+Goal node coordinate input: (225, 15)
+
+Code Script Complete.
