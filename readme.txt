@@ -1,7 +1,7 @@
 Caitlin Conn ENPM661 Project 3 Phase 1 Readme.txt 
 
 This text provides the necessary instructions to run the astar_caitlin_conn_submission.py file to output the results for 
-an A* Algorithm Approach to a point robot forward search problem.
+an A* Algorithm Approach for a robot forward search problem.
 
 ###############################################################################################################################
 
@@ -31,8 +31,8 @@ which will result in an error when running the .py file. The dependencies must b
 
 ###############################################################################################################################
 
-Description of User Test Case Inputs for the Submitted Video Files are located in the Test Cases folder in the submission folder with the following
-file names:
+Description of User Test Case Inputs for the Submitted Video Files are located in the Test Cases folder in the submission folder 
+with the following file names:
 - Case1_Inputs
 - Case2_Inputs
 - Case3_Inputs
@@ -44,7 +44,7 @@ Github Project Link: https://github.com/caitlinpconn/ENPM661_Project3_Phase01.gi
 	
 ###############################################################################################################################
 
-Project #3 Phase #1 Code Execution Instructions: 
+Project 3 Phase 1 Code Execution Instructions: 
 To run the code to solve the search problem using Astar algorithm in Python, perform the following: 
 
 If using a command line terminal, put the astar_caitlin_conn_submission.py file in the current working directory and enter the following 
@@ -67,7 +67,7 @@ User then enters using keyboard 15 followed by enter and then 20 followed by ent
 The code will output if a solution exists for the inputed problem and if the goal node was found.
 The code will output a video animation called 'conn_astar_algorithm_video.avi'if a solution was found to the current directory and the code will output the time the algorithm to run takes in hours, minutes, seconds, and milliseconds using two different methods.
 
-An example is provided below:
+An example of user input in a Python terminal and program execution is provided below.
 
 ###############################################################################################################################
 
